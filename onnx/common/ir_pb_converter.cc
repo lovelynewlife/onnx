@@ -225,6 +225,64 @@ void createDummyValue(
   value_by_name_of[name] = undef->outputs()[0];
 }
 
+Value* typeInfoProtoToValue(const ONNX_NAMESPACE::ValueInfoProto& vip, Value* v){
+  const auto value_case = vip.type().value_case();
+  switch (value_case) {
+    case TypeProto::kTensorType: {
+      const auto& tensor_type = vip.type().tensor_type();
+      v->setValueKind(ValueKind::t);
+      if (tensor_type.has_elem_type()) {
+        v->setElemType(tensor_type.elem_type());
+      }
+      if (tensor_type.has_shape()) {
+        v->setSizes(tensorShapeProtoToDimensions(tensor_type.shape()));
+      }
+    } break;
+    case TypeProto::kOptionalType: {
+      v->setValueKind(ValueKind::o);
+      const auto& optional_type = vip.type().optional_type();
+      if (optional_type.has_elem_type()) {
+        v->assignValueType(optional_type.elem_type());
+      }
+    } break;
+    case TypeProto::kSequenceType: {
+      v->setValueKind(ValueKind::s);
+      const auto& sequence_type = vip.type().sequence_type();
+      if (sequence_type.has_elem_type()) {
+        v->assignValueType(sequence_type.elem_type());
+      }
+    } break;
+    case TypeProto::kMapType: {
+      v->setValueKind(ValueKind::m);
+      const auto& map_type = vip.type().map_type();
+      if (map_type.has_key_type()) {
+        v->setElemType(map_type.key_type());
+      }
+      if(map_type.has_value_type()) {
+        v->assignValueType(map_type.value_type());
+      }
+    } break;
+#ifdef ONNX_ML
+    case TypeProto::kOpaqueType:
+      v->setValueKind(ValueKind::u);
+      break;
+#endif
+    case TypeProto::kSparseTensorType: {
+      const auto& tensor_type = vip.type().tensor_type();
+      v->setValueKind(ValueKind::s);
+      if (tensor_type.has_elem_type()) {
+        v->setElemType(tensor_type.elem_type());
+      }
+      if (tensor_type.has_shape()) {
+        v->setSizes(tensorShapeProtoToDimensions(tensor_type.shape()));
+      }
+    } break;
+    default:
+      v->setValueKind(ValueKind::u);
+  }
+  return v;
+}
+
 std::unique_ptr<Graph> graphProtoToGraph(const ONNX_NAMESPACE::GraphProto& gp, bool nested, const int ir_version) {
   std::unique_ptr<Graph> g(new Graph());
 
@@ -271,13 +329,8 @@ std::unique_ptr<Graph> graphProtoToGraph(const ONNX_NAMESPACE::GraphProto& gp, b
   for (int i = 0; i < gp.input_size(); i++) {
     const auto& vip = gp.input(i);
     auto v = g->addInput();
-    const auto& tensor_type = vip.type().tensor_type();
-    if (tensor_type.has_elem_type()) {
-      v->setElemType(tensor_type.elem_type());
-    }
-    if (tensor_type.has_shape()) {
-      v->setSizes(tensorShapeProtoToDimensions(tensor_type.shape()));
-    }
+    // add another value type type_info2value convert.
+    v = typeInfoProtoToValue(vip, v);
     v->setUniqueName(vip.name());
     value_by_name_of[vip.name()] = v;
   }
@@ -357,28 +410,22 @@ std::unique_ptr<Graph> graphProtoToGraph(const ONNX_NAMESPACE::GraphProto& gp, b
       // in the case of an undefined reference
       createDummyValue(g, gp.output(i).name(), value_by_name_of);
     }
-    const auto& output_tensor_type = gp.output(i).type().tensor_type();
-    if (output_tensor_type.has_elem_type()) {
-      value_by_name_of[gp.output(i).name()]->setElemType(output_tensor_type.elem_type());
-    }
-    if (output_tensor_type.has_shape()) {
-      value_by_name_of[gp.output(i).name()]->setSizes(tensorShapeProtoToDimensions(output_tensor_type.shape()));
-    }
+    // add other value type type_info2value convert.
+    auto v = value_by_name_of[gp.output(i).name()];
+    auto& vip = gp.output(i);
+    v = typeInfoProtoToValue(vip, v);
     g->registerOutput(value_by_name_of[gp.output(i).name()]);
   }
 
   for (int i = 0; i < gp.value_info_size(); i++) {
-    const auto& tensor_type = gp.value_info(i).type().tensor_type();
     if (!value_by_name_of.count(gp.value_info(i).name())) {
       // Ideally the model should not have a value_info whose name does not exist in the graph (unused); simply skip it
       continue;
     }
-    if (tensor_type.has_elem_type()) {
-      value_by_name_of[gp.value_info(i).name()]->setElemType(tensor_type.elem_type());
-    }
-    if (tensor_type.has_shape()) {
-      value_by_name_of[gp.value_info(i).name()]->setSizes(tensorShapeProtoToDimensions(tensor_type.shape()));
-    }
+    // TODO: add other value type type2value convert.
+    auto v = value_by_name_of[gp.value_info(i).name()];
+    auto& vip = gp.value_info(i);
+    v = typeInfoProtoToValue(vip, v);
   }
 
   return g;
@@ -566,12 +613,77 @@ void encodeTypeProtoTensorType(ONNX_NAMESPACE::TypeProto_Tensor* tensor_type, Va
   }
 }
 
+void encodeTypeProtoOptionalType(ONNX_NAMESPACE::TypeProto_Optional* optional_type, Value* n) {
+  if (n->hasValueType()) {
+    ONNX_NAMESPACE::TypeProto* t = optional_type->mutable_elem_type();
+    t->CopyFrom(*n->valueType());
+  }
+}
+
+void encodeTypeProtoSequenceType(ONNX_NAMESPACE::TypeProto_Sequence* sequence_type, Value* n) {
+  if (n->hasValueType()) {
+    ONNX_NAMESPACE::TypeProto* t = sequence_type->mutable_elem_type();
+    t->CopyFrom(*n->valueType());
+  }
+}
+
+void encodeTypeProtoMapType(ONNX_NAMESPACE::TypeProto_Map* map_type, Value* n) {
+  if (n->elemType() != 0) {
+    map_type->set_key_type(n->elemType());
+  }
+  if (n->hasValueType()) {
+    ONNX_NAMESPACE::TypeProto* t = map_type->mutable_value_type();
+    t->CopyFrom(*n->valueType());
+  }
+}
+
+void encodeTypeProtoSparseTensorType(ONNX_NAMESPACE::TypeProto_SparseTensor* sparse_tensor_type, Value* n){
+  if (n->elemType() != 0) {
+    sparse_tensor_type->set_elem_type(n->elemType());
+  }
+  if (n->has_sizes()) {
+    ONNX_NAMESPACE::TensorShapeProto* shape = sparse_tensor_type->mutable_shape();
+    for (const Dimension& d : n->sizes()) {
+      auto dim = shape->add_dim();
+      if (!d.is_unknown) {
+        if (d.is_int) {
+          dim->set_dim_value(d.dim);
+        } else {
+          dim->set_dim_param(d.param);
+        }
+      }
+    }
+  }
+}
+
 void encodeValueInfo(ONNX_NAMESPACE::ValueInfoProto* v, Value* n) {
   v->set_name(value_name(n));
-  if (n->elemType() != 0 || n->has_sizes()) {
-    ONNX_NAMESPACE::TypeProto* t = v->mutable_type();
-    ONNX_NAMESPACE::TypeProto_Tensor* tensor_type = t->mutable_tensor_type();
-    encodeTypeProtoTensorType(tensor_type, n);
+  ONNX_NAMESPACE::TypeProto* t = v->mutable_type();
+
+  ValueKind vk = n->value_kind();
+  switch(vk) {
+    case ValueKind::t:{
+      ONNX_NAMESPACE::TypeProto_Tensor* tensor_type = t->mutable_tensor_type();
+      encodeTypeProtoTensorType(tensor_type, n);
+    }break;
+    case ValueKind::m:{
+      ONNX_NAMESPACE::TypeProto_Map* map_type = t->mutable_map_type();
+      encodeTypeProtoMapType(map_type, n);
+    }break;
+    case ValueKind::o:{
+      ONNX_NAMESPACE::TypeProto_Optional* optional_type = t->mutable_optional_type();
+      encodeTypeProtoOptionalType(optional_type, n);
+    }break;
+    case ValueKind::s:{
+      ONNX_NAMESPACE::TypeProto_Sequence* sequence_type = t->mutable_sequence_type();
+      encodeTypeProtoSequenceType(sequence_type, n);
+    }break;
+    case ValueKind::st:{
+      ONNX_NAMESPACE::TypeProto_SparseTensor* sparse_tensor_type = t->mutable_sparse_tensor_type();
+      encodeTypeProtoSparseTensorType(sparse_tensor_type, n);
+    }break;
+    default:
+      break;
   }
 }
 
@@ -619,9 +731,9 @@ void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
       if (graph_outputs.find(output) != graph_outputs.end()) {
         continue;
       }
-      if (output->elemType() == TensorProto_DataType_UNDEFINED && output->sizes().empty()) {
+      /*if (output->elemType() == TensorProto_DataType_UNDEFINED && output->sizes().empty()) {
         continue;
-      }
+      }*/
       ValueInfoProto* v = p_g->add_value_info();
       encodeValueInfo(v, output);
     }

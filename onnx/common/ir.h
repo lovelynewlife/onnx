@@ -101,6 +101,17 @@ enum class AttributeKind : uint8_t {
   tps
 };
 
+enum class ValueKind: uint8_t {
+  // tensor, sequence, map, optional, sparse tensor
+  // undefined
+  t,
+  s,
+  m,
+  o,
+  st,
+  u
+};
+
 static inline const char* toString(AttributeKind kind) {
   static constexpr const char* names[] = {"f", "fs", "i", "is", "s", "ss", "t", "ts", "g", "gs", "tp", "tps"};
   ONNX_ASSERT(size_t(kind) < sizeof(names) / sizeof(const char*));
@@ -297,7 +308,6 @@ struct Value final {
   Value(Node* node_, size_t offset_);
   Value(Value&&) = default;
   Value& operator=(Value&&) = default;
-  ~Value() = default;
 
  private:
   friend struct Node;
@@ -313,7 +323,35 @@ struct Value final {
   bool has_sizes_;
   std::vector<Dimension> sizes_;
 
+  ValueKind value_kind_ = ValueKind::t;
+  bool has_value_type_;
+  TypeProto* value_type_ = nullptr;
+
  public:
+
+  ValueKind value_kind() {
+    return value_kind_;
+  }
+
+  Value* setValueKind(ValueKind vk) {
+    value_kind_ = vk;
+    return this;
+  }
+
+  Value* assignValueType(const TypeProto& tp){
+    has_value_type_ = true;
+    value_type_ = new TypeProto(tp);
+    return this;
+  }
+
+  TypeProto* valueType(){
+    return value_type_;
+  }
+
+  bool hasValueType(){
+    return has_value_type_;
+  }
+
   Value* setElemType(int32_t elem_type) {
     elem_type_ = elem_type;
     return this;
@@ -387,8 +425,15 @@ struct Value final {
     if (from->has_unique_name()) {
       setUniqueName(from->uniqueName());
     }
+    if (from->hasValueType()) {
+      assignValueType(*(from->valueType()));
+    }
     return this;
   }
+
+    ~Value() {
+      delete value_type_;
+    }
 };
 
 struct Node : public Attributes<Node> {
