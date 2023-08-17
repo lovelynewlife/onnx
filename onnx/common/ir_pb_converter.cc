@@ -731,9 +731,11 @@ void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
       if (graph_outputs.find(output) != graph_outputs.end()) {
         continue;
       }
-      /*if (output->elemType() == TensorProto_DataType_UNDEFINED && output->sizes().empty()) {
-        continue;
-      }*/
+      if(output->value_kind() == ValueKind::t || output->value_kind() == ValueKind::st) {
+        if (output->elemType() == TensorProto_DataType_UNDEFINED && output->sizes().empty()) {
+          continue;
+        }
+      }
       ValueInfoProto* v = p_g->add_value_info();
       encodeValueInfo(v, output);
     }
