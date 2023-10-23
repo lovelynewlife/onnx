@@ -3,7 +3,7 @@ lintrunner-adapters>=0.8.0
 # RUFF, RUFF-FIX
 ruff==0.0.283
 # MYPY
-mypy==1.4.1
+mypy==1.6.1
 types-protobuf==4.23.0.3
 # BLACK-ISORT
 black==23.7.0
