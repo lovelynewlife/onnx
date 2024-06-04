@@ -58,7 +58,7 @@ namespace version_conversion {
 
 class DefaultVersionConverter : public BaseVersionConverter {
  private:
-  bool DEBUG = false;
+  bool DEBUG_SET = false;
 
   std::pair<int, int> version_range;
 
@@ -74,7 +74,7 @@ class DefaultVersionConverter : public BaseVersionConverter {
   }
 
   void debug(const std::string& str) const {
-    if (DEBUG)
+    if (DEBUG_SET)
       std::cerr << str << std::endl;
   }
 
