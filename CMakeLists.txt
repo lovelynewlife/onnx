@@ -109,9 +109,18 @@ endif()
 # find_package Python has replaced PythonInterp and PythonLibs since cmake 3.12
 # Use the following command in the future; now this is only compatible with the latest pybind11
 # find_package(Python ${PY_VERSION} COMPONENTS Interpreter Development REQUIRED)
-find_package(PythonInterp ${PY_VERSION} REQUIRED)
+# find_package(PythonInterp ${PY_VERSION} REQUIRED)
+# if(BUILD_ONNX_PYTHON)
+#   find_package(PythonLibs ${PY_VERSION})
+# endif()
+
+# find_package(PythonInterp ${PY_VERSION} REQUIRED)
+# if(BUILD_ONNX_PYTHON)
+#   find_package(PythonLibs ${PY_VERSION})
+# endif()
+
 if(BUILD_ONNX_PYTHON)
-  find_package(PythonLibs ${PY_VERSION})
+find_package(Python3 COMPONENTS Interpreter Development)
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
