@@ -119,6 +119,7 @@ endif()
 #   find_package(PythonLibs ${PY_VERSION})
 # endif()
 
+find_package(Python ${PY_VERSION} COMPONENTS Interpreter Development REQUIRED)
 if(BUILD_ONNX_PYTHON)
 find_package(Python3 COMPONENTS Interpreter Development)
 endif()
@@ -367,7 +368,7 @@ function(RELATIVE_PROTOBUF_GENERATE_CPP NAME SRCS HDRS ROOT_DIR DEPEND)
     endif()
 
     add_custom_command(OUTPUT "${GENERATED_PROTO}"
-                       COMMAND "${PYTHON_EXECUTABLE}" "${GEN_PROTO_PY}"
+                       COMMAND "${Python_EXECUTABLE}" "${GEN_PROTO_PY}"
                                ARGS ${GEN_PROTO_ARGS}
                        DEPENDS ${INFILE}
                        COMMENT "Running gen_proto.py on ${INFILE}"
