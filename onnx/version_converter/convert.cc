@@ -76,7 +76,7 @@ void DefaultVersionConverter::convert_graph(
       debug(std::string("Finding schema for ") + std::string(cur_op->kind().toString()));
       const std::string op_name = cur_op->kind().toString();
       if (op_name == "ConstantFill") {
-        if (DEBUG) {
+        if (DEBUG_SET) {
           std::cerr
               << "Warning: skipping schema search for experimental op 'ConstantFill' and keeping the op as is. "
                  "Please be advised the converted model may not be working properly if target runtime does not support this "
@@ -84,7 +84,7 @@ void DefaultVersionConverter::convert_graph(
               << std::endl;
         }
       } else if (cur_op->domain() != "" && cur_op->domain() != "ai.onnx") {
-        if (DEBUG) {
+        if (DEBUG_SET) {
           std::cerr << "Warning: opset domain '" << cur_op->domain() << "' is not supported." << std::endl;
         }
       } else if (op_name != "Undefined" && op_name != "Captured") {
@@ -96,7 +96,7 @@ void DefaultVersionConverter::convert_graph(
           auto& op_adapter = adapter_lookup(cur_op, curr_id, next_id);
           // If adapter_lookup returns null, no adapter is present.
           // Error thrown by adapter_lookup
-          if (DEBUG) {
+          if (DEBUG_SET) {
             std::cerr << "Applying adapter" << std::endl;
           }
           // adapt should handle replacing node in graph
